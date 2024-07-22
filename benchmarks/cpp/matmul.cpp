@@ -61,6 +61,7 @@ void setupMatmul(Fusion* fusion, MmaLayout layout, MatmulParams params) {
 
   fusion->addOutput(d);
 
+  preseg_passes::OptimizationPass<preseg_passes::PreSegmenter>::runPass(fusion);
   scheduleMatmul(fusion, params);
 }
 
@@ -160,8 +161,6 @@ static void SingleMatmulBase(
 
   // Define fusion graph
   setupMatmul(fusion, layout, params);
-
-  preseg_passes::OptimizationPass<preseg_passes::PreSegmenter>::runPass(fusion);
 
   KernelArgumentHolder args = KernelArgumentHolder::createKernelArgumentHolder(
       {inputs.first, inputs.second});
