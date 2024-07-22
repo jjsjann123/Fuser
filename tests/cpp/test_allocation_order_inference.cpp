@@ -118,7 +118,7 @@ TEST_F(AllocationOrderInferenceTest, BinaryOpPropagation) {
     auto tv0 = makeSymbolicTensor({-1, 1, 1, -1});
     fusion.addInput(tv0);
     // tv1 has more non-broadcast iter domain and dominates output memory format
-    auto tv1 = makeSymbolicTensor({-1, -1, -1, 1});
+    auto tv1 = makeSymbolicTensor({-1, -1, -1, -1});
     fusion.addInput(tv1);
     auto tv2 = add(tv0, tv1);
     fusion.addOutput(tv2);
@@ -133,13 +133,32 @@ TEST_F(AllocationOrderInferenceTest, BinaryOpPropagation) {
     tv1->setAllocationDomain(tv1_format, true);
 
     preseg_passes::inferenceAllocationOrder(&fusion, {tv0, tv1}, {tv2, tv3});
-    // tv1 dominates output allocation order, which has a permutation {1, 0, 2,
-    // 3}. But since tv1->axis(3) is a broadcast dimension, it did not map to
-    // tv2->axis(3)/tv3->axis(3). Propagated permutation would push the unmapped
-    // axis(3) first in the allocation domain while keeping mapped ids in its
-    // original order {1, 0, 2} as inner entries in its allocation domain.
-    EXPECT_THAT(getAllocationDomainPermutation(tv2), ElementsAre(3, 1, 0, 2));
-    EXPECT_THAT(getAllocationDomainPermutation(tv3), ElementsAre(3, 1, 0, 2));
+    EXPECT_THAT(getAllocationDomainPermutation(tv2), ElementsAre(1, 0, 2, 3));
+    EXPECT_THAT(getAllocationDomainPermutation(tv3), ElementsAre(1, 0, 2, 3));
+  }
+  {
+    auto fusion_ptr = std::make_unique<Fusion>();
+    Fusion& fusion = *fusion_ptr.get();
+    FusionGuard fg(&fusion);
+
+    // Testing propagation between two tensors
+    // tv0 has more non-broadcast iter domain and dominates output memory format
+    auto tv0 = makeSymbolicTensor({1, -1, -1, -1});
+    fusion.addInput(tv0);
+    auto tv1 = makeSymbolicTensor({-1, 1, 1, 1});
+    fusion.addInput(tv1);
+    auto tv2 = add(tv0, tv1);
+    fusion.addOutput(tv2);
+
+    // since tv0->axis(0) is a broadcast, and tv2->axis(0) is not exact map. The
+    // mapping would skip tv->axis(0) and continue mapping for the rest of iter
+    // domains. tv2 will have output allocation order as {0, 3, 2, 1}.
+    std::vector<IterDomain*> tv0_alloc = {
+        tv0->axis(3), tv0->axis(2), tv0->axis(0), tv0->axis(1)};
+    tv0->setAllocationDomain(tv0_alloc, true);
+
+    preseg_passes::inferenceAllocationOrder(&fusion, {tv0, tv1}, {tv2});
+    EXPECT_THAT(getAllocationDomainPermutation(tv2), ElementsAre(0, 3, 2, 1));
   }
 }
 
