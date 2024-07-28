@@ -13,7 +13,7 @@ from typing import Iterable
 # Switches to the given branch, syncs to head, and returns the short hash of
 # the head.
 def switch_to(branch: str, sync: bool) -> str:
-    subprocess.check_call(f"git fetch origin {branch}", shell=True)
+    subprocess.check_call(f"git fetch jiej {branch}", shell=True)
 
     # `advice.detachedHead=false` silences the detached HEAD warning.
     subprocess.check_call(
@@ -21,7 +21,7 @@ def switch_to(branch: str, sync: bool) -> str:
     )
 
     if sync:
-        subprocess.check_call(f"git reset --hard origin/{branch}", shell=True)
+        subprocess.check_call(f"git reset --hard jiej/{branch}", shell=True)
 
     return subprocess.check_output(
         "git rev-parse --short HEAD", shell=True, text=True
@@ -58,7 +58,7 @@ class BenchmarkRunner:
         # Benchmarks fail occasionally for various reasons, e.g. OOM. Use `run`
         # instead of `check_call` to continue with other settings and report only
         # benchmarks that succeeded.
-        command = f"pytest thunder/benchmarks/targets.py --color=no -k '{self._benchmark_filter}' --benchmark-save={out_stem}"
+        command = f"pytest thunder/benchmarks/targets.py -m qkv_split_rope --color=no -k '{self._benchmark_filter}' --benchmark-save={out_stem}"
         if self._storage:
             command += f" --benchmark-storage={self._storage}"
         subprocess.run(command, shell=True)
