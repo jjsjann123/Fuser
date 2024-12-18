@@ -108,6 +108,42 @@ TEST_F(
   }
 }
 
+// Simple pad test
+TEST_F(
+    VectorizationAnalysisTest,
+    ContigInnerDimsMapperResizeFastestDimensionC2P) {
+  Fusion fusion;
+  FusionGuard fg(&fusion);
+  std::vector<std::pair<TensorView*, int64_t>> expection_list;
+
+  auto tv0 = makeContigConcreteTensor({4, 8, 8});
+  fusion.addInput(tv0);
+  // positive resize (+24, +24)
+  auto tv1 =
+      pad(tv0, {IrBuilder::create<Val>(24L), IrBuilder::create<Val>(24L)});
+  fusion.addOutput(tv1);
+
+  // negative resize to zero (-4, -4)
+  auto tv2 =
+      pad(tv0, {IrBuilder::create<Val>(-4), IrBuilder::create<Val>(-4L)});
+  fusion.addOutput(tv2);
+
+  std::unordered_map<TensorView*, Val*> projected_extent_map_from_tv1 =
+      vectorize_helper::ContiguousInnerDimensionsMapper::map(
+          tv1, tv1->getLogicalDomain())
+          .getTvToContigMergeOfInnerSizeMap();
+  checkMappedVal(projected_extent_map_from_tv1, tv0, 8);
+  checkMappedVal(projected_extent_map_from_tv1, tv2, 0);
+
+  // because tv2's fastest dimension is resized to 0
+  std::unordered_map<TensorView*, Val*> projected_extent_map_from_tv2 =
+      vectorize_helper::ContiguousInnerDimensionsMapper::map(
+          tv2, tv2->getLogicalDomain())
+          .getTvToContigMergeOfInnerSizeMap();
+  checkMappedVal(projected_extent_map_from_tv2, tv0, 0);
+  checkMappedVal(projected_extent_map_from_tv2, tv1, 0);
+}
+
 TEST_F(VectorizationAnalysisTest, ContigInnerDimsMapperResizeMiddleDimension) {
   Fusion fusion;
   FusionGuard fg(&fusion);
@@ -151,9 +187,10 @@ TEST_F(
   Fusion fusion;
   FusionGuard fg(&fusion);
 
-  auto tv0 = makeContigConcreteTensor({4, 8, 36});
+  auto tv0 = makeContigConcreteTensor({4, 8, 32});
   fusion.addInput(tv0);
 
+  // the inner most dimension of resize would participate in vectorization
   auto tv1 =
       pad(tv0,
           {IrBuilder::create<Val>(8L),
