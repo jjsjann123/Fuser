@@ -386,13 +386,13 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
       // we need to check slice offset at this point.
       auto projected_extent = getProjectedExtent(id_from);
 
-      std::vector<Val*> expands = {
-          resize_op->leftExpand(), resize_op->rightExpand()};
+      // updating the projected extent by adjusting resize extends
       if (!p2c) {
-        // reverse pad extent for c2p propagation
-        std::for_each(expands.begin(), expands.end(), [](Val*& val) {
-          val = SimplifyingIrBuilder::negExpr(val);
-        });
+        projected_extent = SimplifyingIrBuilder::addExpr(projected_extent, resize_op->leftExpand());
+        projected_extent = SimplifyingIrBuilder::addExpr(projected_extent, resize_op->rightExpand());
+      } else {
+        projected_extent = SimplifyingIrBuilder::subExpr(projected_extent, resize_op->leftExpand());
+        projected_extent = SimplifyingIrBuilder::subExpr(projected_extent, resize_op->rightExpand());
       }
 
       // resize_extent == 0: no resizing, return the projected_extent as-is
@@ -407,7 +407,7 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
       // } else {
       //   gcd(projected_extent, abs(resize_extent));
       // }
-      auto comp = [](Val* projected_extent, Val* resize_extent, bool is_left) {
+      auto comp = [](Val* projected_extent, Val* resize_extent) {
         return SimplifyingIrBuilder::whereExpr(
             SimplifyingIrBuilder::eqExpr(
                 resize_extent, resize_extent->container()->zeroVal()),
@@ -415,9 +415,8 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
             SimplifyingIrBuilder::gcdExpr(
                 projected_extent, IrBuilder::absExpr(resize_extent)));
       };
-      projected_extent = comp(projected_extent, resize_op->leftExpand(), true);
-      projected_extent =
-          comp(projected_extent, resize_op->rightExpand(), false);
+      projected_extent = comp(projected_extent, resize_op->leftExpand());
+      projected_extent = comp(projected_extent, resize_op->rightExpand());
       addProjectedExtent(id_to, projected_extent);
     }
   };
