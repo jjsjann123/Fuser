@@ -386,15 +386,6 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
       // we need to check slice offset at this point.
       auto projected_extent = getProjectedExtent(id_from);
 
-      // updating the projected extent by adjusting resize extends
-      if (!p2c) {
-        projected_extent = SimplifyingIrBuilder::addExpr(projected_extent, resize_op->leftExpand());
-        projected_extent = SimplifyingIrBuilder::addExpr(projected_extent, resize_op->rightExpand());
-      } else {
-        projected_extent = SimplifyingIrBuilder::subExpr(projected_extent, resize_op->leftExpand());
-        projected_extent = SimplifyingIrBuilder::subExpr(projected_extent, resize_op->rightExpand());
-      }
-
       // resize_extent == 0: no resizing, return the projected_extent as-is
       // resize_extent != 0: slicing/padding, return gcd(projected_extent,
       // abs(resize_extent)) This is a conservative analysis of the offset for
@@ -417,6 +408,10 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
       };
       projected_extent = comp(projected_extent, resize_op->leftExpand());
       projected_extent = comp(projected_extent, resize_op->rightExpand());
+
+      // cap extent by the destination
+      projected_extent = SimplifyingIrBuilder::minExpr(projected_extent, id_to->extent());
+
       addProjectedExtent(id_to, projected_extent);
     }
   };
