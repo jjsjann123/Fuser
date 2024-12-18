@@ -386,22 +386,27 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
       // we need to check slice offset at this point.
       auto projected_extent = getProjectedExtent(id_from);
 
-      // resize_extent == 0: no resizing, return the projected_extent as-is
-      // resize_extent != 0: slicing/padding, return gcd(projected_extent,
+      // projected_extent == 0: return the projected_extent as-is
+      // resize_extent == 0   : no resizing, return the projected_extent as-is
+      // resize_extent != 0   : slicing/padding, return gcd(projected_extent,
       // abs(resize_extent)) This is a conservative analysis of the offset for
       // data accessing. A better approach needs to consider the actual start
       // pointer address and handle it in alignment analysis in runtime info. We
       // also need to consider multiple resize stacked together and how they
       // could interact with each other. Translating this to code: if
-      // (resize_extent == 0) {
+      // (resize_extent == 0 || projected_extent == 0) {
       //   return projected_extent;
       // } else {
       //   gcd(projected_extent, abs(resize_extent));
       // }
       auto comp = [](Val* projected_extent, Val* resize_extent) {
         return SimplifyingIrBuilder::whereExpr(
-            SimplifyingIrBuilder::eqExpr(
-                resize_extent, resize_extent->container()->zeroVal()),
+            SimplifyingIrBuilder::logicalOrExpr(
+                SimplifyingIrBuilder::eqExpr(
+                    resize_extent, resize_extent->container()->zeroVal()),
+                SimplifyingIrBuilder::eqExpr(
+                    projected_extent,
+                    projected_extent->container()->zeroVal())),
             projected_extent,
             SimplifyingIrBuilder::gcdExpr(
                 projected_extent, IrBuilder::absExpr(resize_extent)));
@@ -410,7 +415,8 @@ std::vector<IterDomain*> ContiguousInnerDimensionsMapper::projectId(
       projected_extent = comp(projected_extent, resize_op->rightExpand());
 
       // cap extent by the destination
-      projected_extent = SimplifyingIrBuilder::minExpr(projected_extent, id_to->extent());
+      projected_extent =
+          SimplifyingIrBuilder::minExpr(projected_extent, id_to->extent());
 
       addProjectedExtent(id_to, projected_extent);
     }
